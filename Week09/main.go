@@ -122,6 +122,12 @@ func handleConn(conn net.Conn) {
 				return true
 			})
 			session.wchannel <- message
+		} else if strings.HasPrefix(string(line), "/h") {
+			helpMessage := "Help:\r\n/l                               # list all active sessions\r\n" +
+				"/q                               # exit session\r\n" +
+				"/b {message}                     # broadcast excluding the sender\r\n" +
+				"/c {session_id} {message}        # direct messsage\r\n"
+			session.wchannel <- helpMessage
 		} else if strings.HasPrefix(string(line), "/c") {
 			// DM with session {id}
 			tokens := strings.Split(string(line), " ")
