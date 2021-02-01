@@ -28,6 +28,10 @@ type Session struct {
 }
 
 var sessions sync.Map
+var helpMessage string = "Help:\r\n/l                               # list all active sessions\r\n" +
+	"/q                               # exit session\r\n" +
+	"/b {message}                     # broadcast excluding the sender\r\n" +
+	"/c {session_id} {message}        # direct messsage\r\n"
 
 func main() {
 	var shutdownWaitGroup sync.WaitGroup
@@ -123,26 +127,31 @@ func handleConn(conn net.Conn) {
 			})
 			session.wchannel <- message
 		} else if strings.HasPrefix(string(line), "/h") {
-			helpMessage := "Help:\r\n/l                               # list all active sessions\r\n" +
-				"/q                               # exit session\r\n" +
-				"/b {message}                     # broadcast excluding the sender\r\n" +
-				"/c {session_id} {message}        # direct messsage\r\n"
 			session.wchannel <- helpMessage
 		} else if strings.HasPrefix(string(line), "/c") {
 			// DM with session {id}
 			tokens := strings.Split(string(line), " ")
-			sessionID, err := strconv.ParseUint(tokens[1], 10, 64)
-			if err != nil {
-				log.Printf("cannot parse uint64: %v", err)
-				continue
-			}
-			targetSession, ok := sessions.Load(sessionID)
-			if ok {
-				targetSession.(*Session).wchannel <- strings.Join(tokens[2:], " ")
+			if len(tokens) < 3 {
+				session.wchannel <- helpMessage
+			} else {
+				sessionID, err := strconv.ParseUint(tokens[1], 10, 64)
+				if err != nil {
+					log.Printf("cannot parse uint64: %v", err)
+					continue
+				}
+				targetSession, ok := sessions.Load(sessionID)
+				if ok {
+					targetSession.(*Session).wchannel <- strings.Join(tokens[2:], " ")
+				}
 			}
 		} else if strings.HasPrefix(string(line), "/b") {
-			// Broadcast message
-			broadcast(string(line)[3:], session.id)
+			tokens := strings.Split(string(line), " ")
+			if len(tokens) < 2 {
+				session.wchannel <- helpMessage
+			} else {
+				// Broadcast message
+				broadcast(string(line)[3:], session.id)
+			}
 		} else if strings.HasPrefix(string(line), "/q") {
 			// Exit the session
 			removeSession(session.id)
@@ -177,7 +186,7 @@ func sendMsg(sessionID uint64, conn net.Conn, ch <-chan string) {
 			log.Printf("Write failed :%v", err)
 			return
 		}
-		wr.Flush()
+		err = wr.Flush()
 		if err != nil {
 			removeSession(sessionID)
 			log.Printf("Flush failed :%v", err)
